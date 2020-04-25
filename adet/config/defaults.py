@@ -90,3 +90,18 @@ _C.MODEL.PANET.NORM = ""
 
 # Types for fusing the PANET top-down and lateral features. Can be either "sum" or "avg"
 _C.MODEL.PANET.FUSE_TYPE = "sum"
+
+
+# ---------------------------------------------------------------------------- #
+# BiFPN options
+# ---------------------------------------------------------------------------- #
+
+_C.MODEL.BiFPN = CN()
+# Names of the input feature maps to be used by BiFPN
+# They must have contiguous power of 2 strides
+# e.g., ["res2", "res3", "res4", "res5"]
+_C.MODEL.BiFPN.IN_FEATURES = ["res2", "res3", "res4", "res5"]
+_C.MODEL.BiFPN.OUT_CHANNELS = 64
+
+# Options: "" (no norm), "GN"
+_C.MODEL.BiFPN.NORM = ""
