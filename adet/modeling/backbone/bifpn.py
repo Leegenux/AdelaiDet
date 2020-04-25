@@ -16,6 +16,10 @@ from .mobilenet import build_mnv2_backbone
 __all__ = []
 
 
+def swish(x):
+    return x * x.sigmoid()
+
+
 def split_name(name):
     for i, c in enumerate(name):
         if not c.isalpha():
@@ -278,6 +282,8 @@ class BiFPN(Backbone):
 
             new_node = torch.stack(input_nodes, dim=-1)
             new_node = (norm_weights * new_node).sum(dim=-1)
+            new_node = swish(new_node)
+
             name = "outputs_f{}_{}".format(feat_level, inputs_offsets_str)
             feats.append(self.__getattr__(name)(new_node))
 
