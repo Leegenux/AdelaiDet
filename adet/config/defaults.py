@@ -101,7 +101,8 @@ _C.MODEL.BiFPN = CN()
 # They must have contiguous power of 2 strides
 # e.g., ["res2", "res3", "res4", "res5"]
 _C.MODEL.BiFPN.IN_FEATURES = ["res2", "res3", "res4", "res5"]
-_C.MODEL.BiFPN.OUT_CHANNELS = 64
+_C.MODEL.BiFPN.OUT_CHANNELS = 160
+_C.MODEL.BiFPN.NUM_REPEATS = 6
 
 # Options: "" (no norm), "GN"
 _C.MODEL.BiFPN.NORM = ""

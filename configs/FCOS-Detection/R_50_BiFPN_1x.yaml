@@ -7,7 +7,7 @@ MODEL:
     DEPTH: 50
   BiFPN:
     IN_FEATURES: ["res3", "res4", "res5"]
-    OUT_CHANNELS: 64
+    OUT_CHANNELS: 160
 INPUT:
   MIN_SIZE_TRAIN: (800,)
 SOLVER:
