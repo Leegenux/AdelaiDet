@@ -8,9 +8,6 @@ from os.path import join
 
 import torch
 from torch import nn
-import torch.utils.model_zoo as model_zoo
-import torch.nn.functional as F
-import fvcore.nn.weight_init as weight_init
 
 from detectron2.modeling.backbone import FPN
 from detectron2.layers import ShapeSpec
