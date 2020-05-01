@@ -403,39 +403,8 @@ def dla169(cfg, pretrained=None, **kwargs):  # DLA-169
 
 
 @BACKBONE_REGISTRY.register()
-def build_fcos_dla_fpn_backbone(cfg, input_shape: ShapeSpec):
-    """
-    Args:
-        cfg: a detectron2 CfgNode
-
-    Returns:
-        backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
-    """
+def build_dla_backbone(cfg, input_shape: ShapeSpec):
     assert cfg.MODEL.BACKBONE.FREEZE_AT == -1, "Freezing layers does not be supported for DLA"
-
     depth_to_creator = {"DLA34": dla34}
     bottom_up = depth_to_creator[cfg.MODEL.DLA.CONV_BODY](cfg)
-    in_features = cfg.MODEL.FPN.IN_FEATURES
-    out_channels = cfg.MODEL.FPN.OUT_CHANNELS
-    top_levels = cfg.MODEL.FCOS.TOP_LEVELS
-    in_channels_top = out_channels
-
-    if top_levels == 2:
-        top_block = LastLevelP6P7(in_channels_top, out_channels, "p5")
-    elif top_levels == 1:
-        top_block = LastLevelP6(in_channels_top, out_channels, "p5")
-    elif top_levels == 0:
-        top_block = None
-    else:
-        raise NotImplementedError()
-
-    backbone = FPN(
-        bottom_up=bottom_up,
-        in_features=in_features,
-        out_channels=out_channels,
-        norm=cfg.MODEL.FPN.NORM,
-        top_block=top_block,
-        fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
-    )
-
-    return backbone
+    return bottom_up
