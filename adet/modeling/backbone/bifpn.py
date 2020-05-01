@@ -345,6 +345,10 @@ class BiFPN(Backbone):
                 in_channels_list, out_channels, norm
             ))
 
+    @property
+    def size_divisibility(self):
+        return self._size_divisibility
+
     def forward(self, x):
         """
         Args:

@@ -16,11 +16,14 @@ MODEL:
     IN_FEATURES: ["level3", "level4", "level5"]
     OUT_CHANNELS: 160
   FCOS:
-    TOP_LEVELS: 0
-    SIZES_OF_INTEREST: [64, 128]
-    FPN_STRIDES: [8, 16, 32]
-    IN_FEATURES: ['p3', 'p4', 'p5']
+    TOP_LEVELS: 2
+    SIZES_OF_INTEREST: [64, 128, 256, 512]
+    FPN_STRIDES: [8, 16, 32, 64, 128]
+    IN_FEATURES: ['p3', 'p4', 'p5', 'p6', 'p7']
+    NUM_SHARE_CONVS: 4
+    NUM_BOX_CONVS: 0
+    NUM_CLS_CONVS: 0
 SOLVER:
   STEPS: (300000, 340000)
   MAX_ITER: 360000
-OUTPUT_DIR: "output/fcos/FCOS_RT_MS_DLA_34_BiFPN_4x_syncbn"
+OUTPUT_DIR: "output/fcos/FCOS_RT_MS_DLA_34_BiFPN_4x_syncbn_shared_towers"

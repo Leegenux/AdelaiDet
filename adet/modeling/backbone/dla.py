@@ -8,17 +8,11 @@ from os.path import join
 
 import torch
 from torch import nn
-import torch.utils.model_zoo as model_zoo
-import torch.nn.functional as F
-import fvcore.nn.weight_init as weight_init
 
-from detectron2.modeling.backbone import FPN
 from detectron2.layers import ShapeSpec
 from detectron2.modeling.backbone.build import BACKBONE_REGISTRY
 from detectron2.layers.batch_norm import get_norm
 from detectron2.modeling.backbone import Backbone
-
-from .fpn import LastLevelP6, LastLevelP6P7
 
 
 WEB_ROOT = 'http://dl.yf.io/dla/models'
