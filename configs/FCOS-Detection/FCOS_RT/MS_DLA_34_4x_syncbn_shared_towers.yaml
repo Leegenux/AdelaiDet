@@ -25,4 +25,4 @@ MODEL:
 SOLVER:
   STEPS: (300000, 340000)
   MAX_ITER: 360000
-OUTPUT_DIR: "output/fcos/MS_DLA_34_4x_syncbn_shared_towers"
+OUTPUT_DIR: "output/fcos/FCOS_RT_MS_DLA_34_4x_syncbn_shared_towers"
