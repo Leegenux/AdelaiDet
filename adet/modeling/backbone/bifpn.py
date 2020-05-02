@@ -139,17 +139,28 @@ class SingleBiFPN(Backbone):
         super(SingleBiFPN, self).__init__()
 
         self.out_channels = out_channels
-        # build bifpn
-        self.nodes = [
-            {'feat_level': 3, 'inputs_offsets': [3, 4]},
-            {'feat_level': 2, 'inputs_offsets': [2, 5]},
-            {'feat_level': 1, 'inputs_offsets': [1, 6]},
-            {'feat_level': 0, 'inputs_offsets': [0, 7]},
-            {'feat_level': 1, 'inputs_offsets': [1, 7, 8]},
-            {'feat_level': 2, 'inputs_offsets': [2, 6, 9]},
-            {'feat_level': 3, 'inputs_offsets': [3, 5, 10]},
-            {'feat_level': 4, 'inputs_offsets': [4, 11]},
-        ]
+        # build 5-levels bifpn
+        if len(in_channels_list) == 5:
+            self.nodes = [
+                {'feat_level': 3, 'inputs_offsets': [3, 4]},
+                {'feat_level': 2, 'inputs_offsets': [2, 5]},
+                {'feat_level': 1, 'inputs_offsets': [1, 6]},
+                {'feat_level': 0, 'inputs_offsets': [0, 7]},
+                {'feat_level': 1, 'inputs_offsets': [1, 7, 8]},
+                {'feat_level': 2, 'inputs_offsets': [2, 6, 9]},
+                {'feat_level': 3, 'inputs_offsets': [3, 5, 10]},
+                {'feat_level': 4, 'inputs_offsets': [4, 11]},
+            ]
+        elif len(in_channels_list) == 3:
+            self.nodes = [
+                {'feat_level': 1, 'inputs_offsets': [1, 2]},
+                {'feat_level': 0, 'inputs_offsets': [0, 3]},
+                {'feat_level': 1, 'inputs_offsets': [1, 3, 4]},
+                {'feat_level': 2, 'inputs_offsets': [2, 5]},
+            ]
+        else:
+            raise NotImplementedError
+
         node_info = [_ for _ in in_channels_list]
 
         num_output_connections = [0 for _ in in_channels_list]
