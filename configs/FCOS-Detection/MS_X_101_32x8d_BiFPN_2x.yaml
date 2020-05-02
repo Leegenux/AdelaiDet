@@ -12,6 +12,7 @@ MODEL:
   BiFPN:
     IN_FEATURES: ["res3", "res4", "res5"]
     OUT_CHANNELS: 160
+    NORM: "SyncBN"
 SOLVER:
   STEPS: (120000, 160000)
   MAX_ITER: 180000

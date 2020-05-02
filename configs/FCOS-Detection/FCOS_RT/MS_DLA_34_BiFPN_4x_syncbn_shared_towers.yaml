@@ -15,6 +15,7 @@ MODEL:
   BiFPN:
     IN_FEATURES: ["level3", "level4", "level5"]
     OUT_CHANNELS: 160
+    NORM: "SyncBN"
   FCOS:
     TOP_LEVELS: 0
     SIZES_OF_INTEREST: [64, 128]
