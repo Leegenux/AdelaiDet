@@ -17,4 +17,4 @@ MODEL:
 SOLVER:
   STEPS: (300000, 340000)
   MAX_ITER: 360000
-OUTPUT_DIR: "output/fcos/FCOS_RT_MS_R_50_4x"
+OUTPUT_DIR: "output/fcos/FCOS_RT_MS_R_50_4x_syncbn"
