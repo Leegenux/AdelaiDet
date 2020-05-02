@@ -27,10 +27,15 @@ class AdetCheckpointer(DetectionCheckpointer):
                 return {"model": data, "__author__": "Caffe2", "matching_heuristics": True}
 
         loaded = super()._load_file(filename)  # load native pth checkpoint
+
+        if "regnet" in os.path.basename(filename).lower():
+            loaded = loaded["model"]
+            loaded = loaded["model_state"] if "model_state" in loaded else loaded
+
         if "model" not in loaded:
             loaded = {"model": loaded}
 
         basename = os.path.basename(filename).lower()
-        if "lpf" in basename or "dla" in basename:
+        if "lpf" in basename or "dla" in basename or "regnet" in basename:
             loaded["matching_heuristics"] = True
         return loaded

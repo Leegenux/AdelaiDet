@@ -1,0 +1,24 @@
+_BASE_: "Base-FCOS.yaml"
+MODEL:
+  WEIGHTS: "https://dl.fbaipublicfiles.com/pycls/dds_baselines/160906681/RegNetY-1.6GF_dds_8gpu.pyth"
+  PIXEL_MEAN: [103.53, 116.28, 123.675]
+  PIXEL_STD: [57.375, 57.120, 58.395]
+  BACKBONE:
+    NAME: "build_fcos_regnet_fpn_backbone"
+    FREEZE_AT: -1
+  REGNET:
+    SE_ON: True
+    DEPTH: 27
+    W0: 48
+    WA: 20.71
+    WM: 2.65
+    GROUP_W: 24
+  FPN:
+    IN_FEATURES: ["stage3", "stage4", "stage5"]
+INPUT:
+  MIN_SIZE_TRAIN: (800,)
+SOLVER:
+  WARMUP_METHOD: "constant"
+  WARMUP_FACTOR: 0.3333
+  WARMUP_ITERS: 500
+OUTPUT_DIR: "output/fcos/RegNetY-1.6GF_1x"
