@@ -74,6 +74,38 @@ _C.MODEL.DLA.OUT_FEATURES = ["stage2", "stage3", "stage4", "stage5"]
 _C.MODEL.DLA.NORM = "FrozenBN"
 
 # ---------------------------------------------------------------------------- #
+# PANET options
+# ---------------------------------------------------------------------------- #
+
+_C.MODEL.PANET = CN()
+# Names of the input feature maps to be used by FPN
+# They must have contiguous power of 2 strides
+# e.g., ["res2", "res3", "res4", "res5"]
+_C.MODEL.PANET.IN_FEATURES = ["p2", "p3", "p4", "p5"]
+_C.MODEL.PANET.OUT_CHANNELS = 256
+
+# Options: "" (no norm), "GN"
+_C.MODEL.PANET.NORM = ""
+
+# Types for fusing the PANET top-down and lateral features. Can be either "sum" or "avg"
+_C.MODEL.PANET.FUSE_TYPE = "sum"
+
+# ---------------------------------------------------------------------------- #
+# BiFPN options
+# ---------------------------------------------------------------------------- #
+
+_C.MODEL.BiFPN = CN()
+# Names of the input feature maps to be used by BiFPN
+# They must have contiguous power of 2 strides
+# e.g., ["res2", "res3", "res4", "res5"]
+_C.MODEL.BiFPN.IN_FEATURES = ["res2", "res3", "res4", "res5"]
+_C.MODEL.BiFPN.OUT_CHANNELS = 160
+_C.MODEL.BiFPN.NUM_REPEATS = 6
+
+# Options: "" (no norm), "GN"
+_C.MODEL.BiFPN.NORM = ""
+
+# ---------------------------------------------------------------------------- #
 # BlendMask Options
 # ---------------------------------------------------------------------------- #
 _C.MODEL.BLENDMASK = CN()
@@ -180,3 +212,70 @@ _C.MODEL.MEInst.USE_GCN_IN_MASK = False
 _C.MODEL.MEInst.GCN_KERNEL_SIZE = 9
 # Whether to compute loss on original mask (binary mask).
 _C.MODEL.MEInst.LOSS_ON_MASK = False
+
+# ---------------------------------------------------------------------------- #
+# AnyNet options
+# ---------------------------------------------------------------------------- #
+_C.MODEL.ANYNET = CN()
+
+# Stem type
+_C.MODEL.ANYNET.STEM_TYPE = "plain_block"
+
+# Stem width
+_C.MODEL.ANYNET.STEM_W = 32
+
+# Block type
+_C.MODEL.ANYNET.BLOCK_TYPE = "plain_block"
+
+# Depth for each stage (number of blocks in the stage)
+_C.MODEL.ANYNET.DEPTHS = []
+
+# Width for each stage (width of each block in the stage)
+_C.MODEL.ANYNET.WIDTHS = []
+
+# Strides for each stage (applies to the first block of each stage)
+_C.MODEL.ANYNET.STRIDES = []
+
+# Bottleneck multipliers for each stage (applies to bottleneck block)
+_C.MODEL.ANYNET.BOT_MULS = []
+
+# Group widths for each stage (applies to bottleneck block)
+_C.MODEL.ANYNET.GROUP_WS = []
+
+# Whether SE is enabled for res_bottleneck_block
+_C.MODEL.ANYNET.SE_ON = False
+
+# SE ratio
+_C.MODEL.ANYNET.SE_R = 0.25
+
+# ---------------------------------------------------------------------------- #
+# RegNet options
+# ---------------------------------------------------------------------------- #
+_C.MODEL.REGNET = CN()
+
+# Stem type
+_C.MODEL.REGNET.STEM_TYPE = "simple_stem_in"
+# Stem width
+_C.MODEL.REGNET.STEM_W = 32
+# Block type
+_C.MODEL.REGNET.BLOCK_TYPE = "res_bottleneck_block"
+# Stride of each stage
+_C.MODEL.REGNET.STRIDE = 2
+# Squeeze-and-Excitation (RegNetY)
+_C.MODEL.REGNET.SE_ON = False
+_C.MODEL.REGNET.SE_R = 0.25
+
+# Depth
+_C.MODEL.REGNET.DEPTH = 10
+# Initial width
+_C.MODEL.REGNET.W0 = 32
+# Slope
+_C.MODEL.REGNET.WA = 5.0
+# Quantization
+_C.MODEL.REGNET.WM = 2.5
+# Group width
+_C.MODEL.REGNET.GROUP_W = 16
+# Bottleneck multiplier (bm = 1 / b from the paper)
+_C.MODEL.REGNET.BOT_MUL = 1.0
+# Options: FrozenBN, GN, "SyncBN", "BN"
+_C.MODEL.REGNET.NORM = "FrozenBN"
