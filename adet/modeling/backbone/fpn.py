@@ -9,6 +9,7 @@ from detectron2.modeling.backbone.build import BACKBONE_REGISTRY
 from .resnet_lpf import build_resnet_lpf_backbone
 from .resnet_interval import build_resnet_interval_backbone
 from .mobilenet import build_mnv2_backbone
+from .dla import build_dla_backbone
 
 
 class LastLevelP6P7(nn.Module):
@@ -85,4 +86,41 @@ def build_fcos_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):
         top_block=top_block,
         fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
     )
+    return backbone
+
+
+@BACKBONE_REGISTRY.register()
+def build_fcos_dla_fpn_backbone(cfg, input_shape: ShapeSpec):
+    """
+    Args:
+        cfg: a detectron2 CfgNode
+
+    Returns:
+        backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
+    """
+    bottom_up = build_dla_backbone(cfg, input_shape)
+
+    in_features = cfg.MODEL.FPN.IN_FEATURES
+    out_channels = cfg.MODEL.FPN.OUT_CHANNELS
+    top_levels = cfg.MODEL.FCOS.TOP_LEVELS
+    in_channels_top = out_channels
+
+    if top_levels == 2:
+        top_block = LastLevelP6P7(in_channels_top, out_channels, "p5")
+    elif top_levels == 1:
+        top_block = LastLevelP6(in_channels_top, out_channels, "p5")
+    elif top_levels == 0:
+        top_block = None
+    else:
+        raise NotImplementedError()
+
+    backbone = FPN(
+        bottom_up=bottom_up,
+        in_features=in_features,
+        out_channels=out_channels,
+        norm=cfg.MODEL.FPN.NORM,
+        top_block=top_block,
+        fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
+    )
+
     return backbone
