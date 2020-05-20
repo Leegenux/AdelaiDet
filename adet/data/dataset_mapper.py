@@ -1,8 +1,10 @@
 import copy
 import numpy as np
+import os.path as osp
 import torch
 from fvcore.common.file_io import PathManager
 from PIL import Image
+import logging
 
 from detectron2.data.dataset_mapper import DatasetMapper
 from detectron2.data.detection_utils import SizeMismatchError
@@ -22,6 +24,8 @@ This file contains the default mapping that's applied to "dataset dicts".
 
 __all__ = ["DatasetMapperWithBasis"]
 
+logger = logging.getLogger(__name__)
+
 
 class DatasetMapperWithBasis(DatasetMapper):
     """
@@ -31,7 +35,8 @@ class DatasetMapperWithBasis(DatasetMapper):
     def __init__(self, cfg, is_train=True):
         super().__init__(cfg, is_train)
 
-        # rebuild transform gen
+        # Rebuild transform gen
+        logger.info("Rebuilding the transform generators. The previous generators will be overridden.")
         self.tfm_gens = build_transform_gen(cfg, is_train)
 
         # fmt: off
@@ -82,7 +87,11 @@ class DatasetMapperWithBasis(DatasetMapper):
                     crop_box=self.crop_box,
                 )
                 image = crop_tfm.apply_image(image)
-            image, transforms = T.apply_transform_gens(self.tfm_gens, image)
+            try:
+                image, transforms = T.apply_transform_gens(self.tfm_gens, image)
+            except ValueError as e:
+                print(dataset_dict["file_name"])
+                raise e
             if self.crop_gen:
                 transforms = crop_tfm + transforms
 
@@ -144,8 +153,9 @@ class DatasetMapperWithBasis(DatasetMapper):
             if self.ann_set == "coco":
                 basis_sem_path = dataset_dict["file_name"].replace('train2017', 'thing_train2017').replace('image/train', 'thing_train')
             else:
-                basis_sem_path = dataset_dict["file_name"].replace('coco', 'lvis').replace('train2017', 'thing_train').replace('jpg', 'npz')
-            basis_sem_path = basis_sem_path.replace('jpg', 'npz')
+                basis_sem_path = dataset_dict["file_name"].replace('coco', 'lvis').replace('train2017', 'thing_train')
+            # change extension to npz
+            basis_sem_path = osp.splitext(basis_sem_path)[0] + ".npz"
             basis_sem_gt = np.load(basis_sem_path)["mask"]
             basis_sem_gt = transforms.apply_segmentation(basis_sem_gt)
             basis_sem_gt = torch.as_tensor(basis_sem_gt.astype("long"))
