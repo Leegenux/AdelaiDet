@@ -1,0 +1,25 @@
+_BASE_: "Base-Pretrain.yaml"
+MODEL:
+  BACKBONE:
+    NAME: "build_fcos_resnet_bifpn_backbone"
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  RESNETS:
+    DEPTH: 50
+  BiFPN:
+    IN_FEATURES: ["res2", "res3", "res4", "res5"]
+    OUT_CHANNELS: 160
+    NORM: "SyncBN"
+  BATEXT:
+    RECOGNIZER: "attn"
+    CONV_DIM: 160
+  FCOS:
+    TOP_LEVELS: 1
+SOLVER:
+  IMS_PER_BATCH: 8
+  BASE_LR: 0.01
+  STEPS: (160000, 220000)
+  MAX_ITER: 260000
+  CHECKPOINT_PERIOD: 20000
+TEST:
+  EVAL_PERIOD: 20000
+OUTPUT_DIR: "output/batext/pretrain/attn_R_50_bifpn"

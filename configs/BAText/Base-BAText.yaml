@@ -14,6 +14,8 @@ MODEL:
     USE_SCALE: False
     NUM_CLASSES: 1
     INFERENCE_TH_TEST: 0.45
+    IN_FEATURES: ["p3", "p4", "p5", "p6"]
+    FPN_STRIDES: [8, 16, 32, 64]
   ROI_HEADS:
     NAME: "TextHead"
     IOU_THRESHOLDS: [0.5]

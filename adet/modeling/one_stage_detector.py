@@ -49,13 +49,16 @@ class OneStageDetector(ProposalNetwork):
         return processed_results
 
 
-def build_top_module(cfg):
+def build_top_module(cfg, input_shape):
     top_type = cfg.MODEL.TOP_MODULE.NAME
     if top_type == "conv":
-        inp = cfg.MODEL.FPN.OUT_CHANNELS
-        oup = cfg.MODEL.TOP_MODULE.DIM
+        in_channels = [s.channels for s in input_shape]
+        assert len(set(in_channels)) == 1, "Each level must have the same channel!"
+        in_channels = in_channels[0]
+
+        out_channels = cfg.MODEL.TOP_MODULE.DIM
         top_module = nn.Conv2d(
-            inp, oup,
+            in_channels, out_channels,
             kernel_size=3, stride=1, padding=1)
     else:
         top_module = None
@@ -70,7 +73,8 @@ class OneStageRCNN(GeneralizedRCNN):
     """
     def __init__(self, cfg):
         super().__init__(cfg)
-        self.top_module = build_top_module(cfg)
+        input_shape = self.backbone.output_shape()
+        self.top_module = build_top_module(cfg, [input_shape[f] for f in self.proposal_generator.in_features])
         self.to(self.device)
 
     def forward(self, batched_inputs):
