@@ -1,4 +1,5 @@
 import math
+import torch
 from torch import nn
 import torch.nn.functional as F
 import fvcore.nn.weight_init as weight_init
@@ -12,6 +13,23 @@ from detectron2.layers import Conv2d, ShapeSpec, get_norm
 from .resnet_lpf import build_resnet_lpf_backbone
 from .resnet_interval import build_resnet_interval_backbone
 from .mobilenet import build_mnv2_backbone
+
+class MemoryEfficientSwish(nn.Module):
+    def forward(self, x):
+        return SwishImplementation.apply(x)
+
+class SwishImplementation(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, i):
+        result = i * torch.sigmoid(i)
+        ctx.save_for_backward(i)
+        return result
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        i = ctx.saved_variables[0]
+        sigmoid_i = torch.sigmoid(i)
+        return grad_output * (sigmoid_i * (1 + i * (1 - sigmoid_i)))
 
 class BiFPN(Backbone): # todo: implement a version that works
     """
@@ -47,10 +65,9 @@ class BiFPN(Backbone): # todo: implement a version that works
                 utilize trainable weights to conduct the fusion.
         """
         super(BiFPN, self).__init__()
-        assert isinstance(bottom_up, Backbone)
+        assert isinstance(bottom_up, Backbone), "A bottom_up have to be a Backbone instance!"
 
-        # Feature map strides and channels from the bottom up network (e.g. ResNet)
-        input_shapes = bottom_up.output_shape()
+        input_shapes = bottom_up.output_shape()  # high resolution to low
         in_strides = [input_shapes[f].stride for f in in_features]
         in_channels = [input_shapes[f].channels for f in in_features]
 
@@ -85,11 +102,11 @@ class BiFPN(Backbone): # todo: implement a version that works
             output_convs.append(output_conv)
         # Place convs into top-down order (from low to high resolution)
         # to make the top-down computation in forward clearer.
-        self.lateral_convs = lateral_convs[::-1]
+        self.lateral_convs = lateral_convs[::-1]  # low resolution to high (high level to low)
         self.output_convs = output_convs[::-1]
-        self.top_block = top_block
         self.in_features = in_features
         self.bottom_up = bottom_up
+        self.swish = MemoryEfficientSwish()
         # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
         self._out_feature_strides = {"p{}".format(int(math.log2(s))): s for s in in_strides}
         # top block output feature maps.
