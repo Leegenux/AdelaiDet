@@ -14,9 +14,11 @@ from .resnet_lpf import build_resnet_lpf_backbone
 from .resnet_interval import build_resnet_interval_backbone
 from .mobilenet import build_mnv2_backbone
 
+
 class MemoryEfficientSwish(nn.Module):
     def forward(self, x):
         return SwishImplementation.apply(x)
+
 
 class SwishImplementation(torch.autograd.Function):
     @staticmethod
@@ -31,7 +33,8 @@ class SwishImplementation(torch.autograd.Function):
         sigmoid_i = torch.sigmoid(i)
         return grad_output * (sigmoid_i * (1 + i * (1 - sigmoid_i)))
 
-class BiFPN(Backbone): # todo: implement a version that works
+
+class BiFPN(Backbone):  # todo: implement a version that works
     """
     This module implements :paper:`BiFPN`.
     It creates pyramid features built on top of some input feature maps.
@@ -68,8 +71,8 @@ class BiFPN(Backbone): # todo: implement a version that works
         assert isinstance(bottom_up, Backbone), "A bottom_up have to be a Backbone instance!"
 
         input_shapes = bottom_up.output_shape()  # high resolution to low
-        in_strides = [input_shapes[f].stride for f in in_features]
-        in_channels = [input_shapes[f].channels for f in in_features]
+        in_strides = [input_shapes[f].stride for f in in_features]  # strides against the original picture
+        in_channels = [input_shapes[f].channels for f in in_features]  # level names
 
         _assert_strides_are_log2_contiguous(in_strides)
         lateral_convs = []
@@ -120,11 +123,18 @@ class BiFPN(Backbone): # todo: implement a version that works
         assert fuse_type in {"avg", "sum"}
         self._fuse_type = fuse_type
 
+        # weights for the 2 and 3 features fusion respectively
+        self.epsilon = 1E-5
+
+        levels_num = len(in_features)
+        self.weights_for_2_fusion = nn.Parameter(torch.Tensor(2, levels_num), requires_grad=True)
+        self.weights_for_3_fusion = nn.Parameter(torch.Tensor(3, levels_num - 2), requires_grad=True)
+
     @property
     def size_divisibility(self):
         return self._size_divisibility
 
-    def forward(self, x):  # todo: first implement the forward function
+    def forward(self, x):
         """
         Args:
             input (dict[str->Tensor]): mapping feature map name (e.g., "res5") to
@@ -137,6 +147,14 @@ class BiFPN(Backbone): # todo: implement a version that works
                 paper convention: "p<stage>", where stage has stride = 2 ** stage e.g.,
                 ["p2", "p3", ..., "p6"].
         """
+        # weights
+        weights_for_2_fusion = F.relu(self.weights_for_2_fusion) / (
+                torch.sum(self.weights_for_2_fusion, dim=0) + self.epsilon)
+        weights_for_3_fusion = F.relu(self.weights_for_3_fusion) / (
+                torch.sum(self.weights_for_3_fusion, dim=0) + self.epsilon)
+
+        # todo: build top-down
+
         # Reverse feature maps into top-down order (from low to high resolution)
         bottom_up_features = self.bottom_up(x)
         x = [bottom_up_features[f] for f in self.in_features[::-1]]
