@@ -124,7 +124,7 @@ class BiFPN(Backbone): # todo: implement a version that works
     def size_divisibility(self):
         return self._size_divisibility
 
-    def forward(self, x):
+    def forward(self, x):  # todo: first implement the forward function
         """
         Args:
             input (dict[str->Tensor]): mapping feature map name (e.g., "res5") to
