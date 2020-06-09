@@ -3,6 +3,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import fvcore.nn.weight_init as weight_init
+import copy
 
 from detectron2.modeling.backbone import build_resnet_backbone
 from detectron2.modeling.backbone.backbone import Backbone
@@ -14,9 +15,11 @@ from .resnet_lpf import build_resnet_lpf_backbone
 from .resnet_interval import build_resnet_interval_backbone
 from .mobilenet import build_mnv2_backbone
 
+
 class Swish(nn.Module):
     def forward(self, x):
         return x * torch.sigmoid(x)
+
 
 class MemoryEfficientSwish(nn.Module):
     def forward(self, x):
@@ -36,7 +39,7 @@ class SwishImplementation(torch.autograd.Function):
         sigmoid_i = torch.sigmoid(i)
         return grad_output * (sigmoid_i * (1 + i * (1 - sigmoid_i)))
 
-# todo get those layers
+
 class Conv2dStaticSamePadding(nn.Module):
     """
     created by Zylo117
@@ -82,7 +85,8 @@ class Conv2dStaticSamePadding(nn.Module):
         x = self.conv(x)
         return x
 
-class SeparableConvBlock(nn.Module):
+
+class SeparableConvBlock(nn.Module):  # batch normalization enabled by default
     """
     created by Zylo117
     """
@@ -122,6 +126,7 @@ class SeparableConvBlock(nn.Module):
 
         return x
 
+
 class BiFPN(Backbone):  # todo: implement a version that works
     """
     This module implements :paper:`BiFPN`.
@@ -160,10 +165,12 @@ class BiFPN(Backbone):  # todo: implement a version that works
 
         input_shapes = bottom_up.output_shape()  # high resolution to low
         in_strides = [input_shapes[f].stride for f in in_features]  # strides against the original picture
-        in_channels = [input_shapes[f].channels for f in in_features]  # level names
-
+        in_channels = [input_shapes[f].channels for f in in_features]  # channel numbers
+        # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
         _assert_strides_are_log2_contiguous(in_strides)
-        lateral_convs = []  # todo
+        self._out_feature_strides = {"p{}".format(int(math.log2(s))): s for s in in_strides}
+
+        lateral_convs = []
         output_convs = []
 
         use_bias = norm == ""
@@ -198,8 +205,6 @@ class BiFPN(Backbone):  # todo: implement a version that works
         self.in_features = in_features
         self.bottom_up = bottom_up
         self.swish = MemoryEfficientSwish()
-        # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
-        self._out_feature_strides = {"p{}".format(int(math.log2(s))): s for s in in_strides}
         # top block output feature maps.
         if self.top_block is not None:
             for s in range(stage, stage + self.top_block.num_levels):
@@ -211,16 +216,61 @@ class BiFPN(Backbone):  # todo: implement a version that works
         assert fuse_type in {"avg", "sum"}
         self._fuse_type = fuse_type
 
+        # BIFPN part
         # weights for the 2 and 3 features fusion respectively
         self.epsilon = 1E-5
 
-        levels_num = len(in_features)
-        self.weights_for_2_fusion = nn.Parameter(torch.Tensor(2, levels_num), requires_grad=True)
-        self.weights_for_3_fusion = nn.Parameter(torch.Tensor(3, levels_num - 2), requires_grad=True)
+        self.levels_num = len(in_features)
+        self.weights_for_2_fusion = nn.Parameter(torch.Tensor(2, self.levels_num), requires_grad=True)
+        self.weights_for_3_fusion = nn.Parameter(torch.Tensor(3, self.levels_num - 2), requires_grad=True)
+        # 1x1 convs that resizes the input features to out_channels
+        is_in_and_out_channels_same = True
+        for num_channel in in_channels:
+            if num_channel != out_channels:
+                is_in_and_out_channels_same = False
+                break
+        self.is_in_and_out_channels_same = is_in_and_out_channels_same
+        if self.is_in_and_out_channels_same:
+            self.resize_convs = []
+            for num_in_channel in in_channels:
+                self.resize_convs.append(Conv2d(
+                    num_in_channel, out_channels, kernel_size=1, bias=use_bias, norm=get_norm(norm, out_channels)
+                ))
+
+        # bifpn blocks
+        self.bifpn_convs = []
+        for i in range(2 * self.levels_num - 1):
+            in_channels =  #
+            self.bifpn_convs.append(SeparableConvBlock(in_channels, out_channels))
 
     @property
     def size_divisibility(self):
         return self._size_divisibility
+
+    def forward(self, inputs):
+        # fusion weights normalization
+        weights_for_2_fusion = F.relu(self.weights_for_2_fusion) / (
+                torch.sum(self.weights_for_2_fusion, dim=0) + self.epsilon)
+        weights_for_3_fusion = F.relu(self.weights_for_3_fusion) / (
+                torch.sum(self.weights_for_3_fusion, dim=0) + self.epsilon)
+
+        index_bifpn_convs = 0
+
+        # resize all the inputs channel-wise
+        if not self.is_in_and_out_channels_same:
+            for ind, in_feat in enumerate(inputs):
+                inputs[ind] = self.resize_convs[ind](in_feat)
+
+        path_feats = inputs
+        input_clone = copy.deepcopy(inputs)
+
+        # build top-down structure
+        for i in range(self.levels_num - 1, 0, -1):
+            # todo: build top-down
+            path_feats[i - 1] = (weights_for_2_fusion[0, i - 1] * input_clone[i - 1] + weights_for_2_fusion[
+                1, i - 1] * F.interpolate(path_feats[i], scale_factor=2, mode='nearest'))
+
+            path_feats[i - 1] = self.
 
     def forward(self, x):
         """
@@ -235,13 +285,6 @@ class BiFPN(Backbone):  # todo: implement a version that works
                 paper convention: "p<stage>", where stage has stride = 2 ** stage e.g.,
                 ["p2", "p3", ..., "p6"].
         """
-        # weights
-        weights_for_2_fusion = F.relu(self.weights_for_2_fusion) / (
-                torch.sum(self.weights_for_2_fusion, dim=0) + self.epsilon)
-        weights_for_3_fusion = F.relu(self.weights_for_3_fusion) / (
-                torch.sum(self.weights_for_3_fusion, dim=0) + self.epsilon)
-
-        # todo: build top-down
 
         # Reverse feature maps into top-down order (from low to high resolution)
         bottom_up_features = self.bottom_up(x)
