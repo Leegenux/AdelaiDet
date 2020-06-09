@@ -127,7 +127,7 @@ class SeparableConvBlock(nn.Module):  # batch normalization enabled by default
         return x
 
 
-class BiFPN(Backbone):  # todo: implement a version that works
+class BiFPN(Backbone):  # todo: make bifpn implementation compliant to FPN implementation
     """
     This module implements :paper:`BiFPN`.
     It creates pyramid features built on top of some input feature maps.
@@ -240,7 +240,7 @@ class BiFPN(Backbone):  # todo: implement a version that works
         # bifpn blocks
         self.bifpn_convs = []
         for i in range(2 * self.levels_num - 1):
-            self.bifpn_convs.append(SeparableConvBlock(in_channels=out_channels))
+            self.bifpn_convs.append(SeparableConvBlock(in_channels=out_channels, activation=True))
 
     @property
     def size_divisibility(self):
@@ -261,16 +261,29 @@ class BiFPN(Backbone):  # todo: implement a version that works
                 inputs[ind] = self.resize_convs[ind](in_feat)
 
         path_feats = inputs
-        input_clone = copy.deepcopy(inputs)
+        inputs_clone = copy.deepcopy(inputs)
 
         # build top-down structure
         for i in range(self.levels_num - 1, 0, -1):
-            path_feats[i - 1] = (weights_for_2_fusion[0, i - 1] * input_clone[i - 1] + weights_for_2_fusion[
-                1, i - 1] * F.interpolate(path_feats[i], scale_factor=2, mode='nearest'))
+            path_feats[i - 1] = weights_for_2_fusion[0, i - 1] * inputs_clone[i - 1] + weights_for_2_fusion[
+                1, i - 1] * F.interpolate(path_feats[i], scale_factor=2, mode='nearest')
 
             path_feats[i - 1] = self.bifpn_convs[index_bifpn_convs](path_feats[i - 1])
+            index_bifpn_convs += 1
 
-        # todo build down-up
+        # build down-up structure
+        for i in range(0, self.levels_num - 2):
+            path_feats[i + 1] = weights_for_3_fusion[0, i] * path_feats[i + 1] + weights_for_3_fusion[
+                1, i] * F.max_pool2d(path_feats[i], kernel_size=2) + weights_for_3_fusion[2, i] * inputs_clone[i + 1]
+
+            path_feats[i + 1] = self.bifpn_convs[index_bifpn_convs](path_feats[i + 1])
+            index_bifpn_convs += 1
+        path_feats[self.levels_num - 1] = weights_for_2_fusion[0, self.levels_num - 1] * path_feats[
+            self.levels_num - 1] + weights_for_2_fusion[1, self.levels_num - 1] * F.max_pool2d(
+            path_feats[self.levels_num - 2], kernel_size=2)
+        path_feats[self.levels_num - 1] = self.bifpn_convs[index_bifpn_convs](path_feats[self.levels_num - 1])
+
+        return path_feats
 
     def forward(self, x):
         """
