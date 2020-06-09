@@ -127,14 +127,14 @@ class SeparableConvBlock(nn.Module):  # batch normalization enabled by default
         return x
 
 
-class BiFPN(Backbone):  # todo: make bifpn implementation compliant to FPN implementation
+class BiFPN(Backbone):  # todo: check compliance to FPN
     """
     This module implements :paper:`BiFPN`.
     It creates pyramid features built on top of some input feature maps.
     """
 
     def __init__(
-            self, bottom_up, in_features, out_channels, norm="", fuse_type="sum"
+            self, bottom_up, in_features, out_channels, norm="", top_block=None,
     ):
         """
         Args:
@@ -169,60 +169,29 @@ class BiFPN(Backbone):  # todo: make bifpn implementation compliant to FPN imple
         # Return feature names are "p<stage>", like ["p2", "p3", ..., "p6"]
         _assert_strides_are_log2_contiguous(in_strides)
         self._out_feature_strides = {"p{}".format(int(math.log2(s))): s for s in in_strides}
+        self._out_features = list(self._out_feature_strides.keys())  # out feature names
+        self._out_feature_channels = {k: out_channels for k in self._out_features}
 
-        lateral_convs = []
-        output_convs = []
-
-        use_bias = norm == ""
-        for idx, in_channels in enumerate(in_channels):
-            lateral_norm = get_norm(norm, out_channels)
-            output_norm = get_norm(norm, out_channels)
-
-            lateral_conv = Conv2d(
-                in_channels, out_channels, kernel_size=1, bias=use_bias, norm=lateral_norm
-            )
-            output_conv = Conv2d(
-                out_channels,
-                out_channels,
-                kernel_size=3,
-                stride=1,
-                padding=1,
-                bias=use_bias,
-                norm=output_norm,
-            )
-            weight_init.c2_xavier_fill(lateral_conv)
-            weight_init.c2_xavier_fill(output_conv)
-            stage = int(math.log2(in_strides[idx]))
-            self.add_module("fpn_lateral{}".format(stage), lateral_conv)
-            self.add_module("fpn_output{}".format(stage), output_conv)
-
-            lateral_convs.append(lateral_conv)
-            output_convs.append(output_conv)
-        # Place convs into top-down order (from low to high resolution)
-        # to make the top-down computation in forward clearer.
-        self.lateral_convs = lateral_convs[::-1]  # low resolution to high (high level to low)
-        self.output_convs = output_convs[::-1]
+        # other stuff
         self.in_features = in_features
+        self.top_block = top_block
         self.bottom_up = bottom_up
         self.swish = MemoryEfficientSwish()
+        self._size_divisibility = in_strides[-1]
+
         # top block output feature maps.
+        stage = int(math.log2(in_strides[-1]))
         if self.top_block is not None:
             for s in range(stage, stage + self.top_block.num_levels):
                 self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1)
 
-        self._out_features = list(self._out_feature_strides.keys())
-        self._out_feature_channels = {k: out_channels for k in self._out_features}
-        self._size_divisibility = in_strides[-1]
-        assert fuse_type in {"avg", "sum"}
-        self._fuse_type = fuse_type
-
-        # BIFPN part
         # weights for the 2 and 3 features fusion respectively
-        self.epsilon = 1E-5
+        self.epsilon = 1E-4
 
         self.levels_num = len(in_features)
         self.weights_for_2_fusion = nn.Parameter(torch.Tensor(2, self.levels_num), requires_grad=True)
         self.weights_for_3_fusion = nn.Parameter(torch.Tensor(3, self.levels_num - 2), requires_grad=True)
+
         # 1x1 convs that resizes the input features to out_channels
         is_in_and_out_channels_same = True
         for num_channel in in_channels:
@@ -230,6 +199,7 @@ class BiFPN(Backbone):  # todo: make bifpn implementation compliant to FPN imple
                 is_in_and_out_channels_same = False
                 break
         self.is_in_and_out_channels_same = is_in_and_out_channels_same
+        use_bias = norm == ""
         if self.is_in_and_out_channels_same:
             self.resize_convs = []
             for num_in_channel in in_channels:
@@ -237,7 +207,7 @@ class BiFPN(Backbone):  # todo: make bifpn implementation compliant to FPN imple
                     num_in_channel, out_channels, kernel_size=1, bias=use_bias, norm=get_norm(norm, out_channels)
                 ))
 
-        # bifpn blocks
+        # bifpn blocks todo figure out usage of self.add_module
         self.bifpn_convs = []
         for i in range(2 * self.levels_num - 1):
             self.bifpn_convs.append(SeparableConvBlock(in_channels=out_channels, activation=True))
@@ -247,43 +217,60 @@ class BiFPN(Backbone):  # todo: make bifpn implementation compliant to FPN imple
         return self._size_divisibility
 
     def forward(self, inputs):
+        bottom_up_features = self.bottom_up(inputs)
+        inputs_from_bottom_up = [bottom_up_features[f] for f in self.in_features[::-1]]  #
         # fusion weights normalization
         weights_for_2_fusion = F.relu(self.weights_for_2_fusion) / (
                 torch.sum(self.weights_for_2_fusion, dim=0) + self.epsilon)
         weights_for_3_fusion = F.relu(self.weights_for_3_fusion) / (
                 torch.sum(self.weights_for_3_fusion, dim=0) + self.epsilon)
 
-        index_bifpn_convs = 0
-
         # resize all the inputs channel-wise
         if not self.is_in_and_out_channels_same:
-            for ind, in_feat in enumerate(inputs):
-                inputs[ind] = self.resize_convs[ind](in_feat)
+            for ind, in_feat in enumerate(inputs_from_bottom_up):
+                inputs_from_bottom_up[ind] = self.resize_convs[ind](in_feat)
 
-        path_feats = inputs
-        inputs_clone = copy.deepcopy(inputs)
+        inputs_from_bottom_up_clone = copy.deepcopy(inputs_from_bottom_up)
+        intermediate_features = inputs_from_bottom_up
+        index_bifpn_convs = 0
 
         # build top-down structure
         for i in range(self.levels_num - 1, 0, -1):
-            path_feats[i - 1] = weights_for_2_fusion[0, i - 1] * inputs_clone[i - 1] + weights_for_2_fusion[
-                1, i - 1] * F.interpolate(path_feats[i], scale_factor=2, mode='nearest')
+            intermediate_features[i - 1] = weights_for_2_fusion[0, i - 1] * inputs_from_bottom_up_clone[i - 1] + \
+                                           weights_for_2_fusion[
+                                               1, i - 1] * F.interpolate(intermediate_features[i], scale_factor=2,
+                                                                         mode='nearest')
 
-            path_feats[i - 1] = self.bifpn_convs[index_bifpn_convs](path_feats[i - 1])
+            intermediate_features[i - 1] = self.bifpn_convs[index_bifpn_convs](intermediate_features[i - 1])
             index_bifpn_convs += 1
 
         # build down-up structure
         for i in range(0, self.levels_num - 2):
-            path_feats[i + 1] = weights_for_3_fusion[0, i] * path_feats[i + 1] + weights_for_3_fusion[
-                1, i] * F.max_pool2d(path_feats[i], kernel_size=2) + weights_for_3_fusion[2, i] * inputs_clone[i + 1]
+            intermediate_features[i + 1] = weights_for_3_fusion[0, i] * intermediate_features[i + 1] + \
+                                           weights_for_3_fusion[
+                                               1, i] * F.max_pool2d(intermediate_features[i], kernel_size=2) + \
+                                           weights_for_3_fusion[2, i] * \
+                                           inputs_from_bottom_up_clone[i + 1]
 
-            path_feats[i + 1] = self.bifpn_convs[index_bifpn_convs](path_feats[i + 1])
+            intermediate_features[i + 1] = self.bifpn_convs[index_bifpn_convs](intermediate_features[i + 1])
             index_bifpn_convs += 1
-        path_feats[self.levels_num - 1] = weights_for_2_fusion[0, self.levels_num - 1] * path_feats[
-            self.levels_num - 1] + weights_for_2_fusion[1, self.levels_num - 1] * F.max_pool2d(
-            path_feats[self.levels_num - 2], kernel_size=2)
-        path_feats[self.levels_num - 1] = self.bifpn_convs[index_bifpn_convs](path_feats[self.levels_num - 1])
+        intermediate_features[self.levels_num - 1] = weights_for_2_fusion[0, self.levels_num - 1] * \
+                                                     intermediate_features[
+                                                         self.levels_num - 1] + weights_for_2_fusion[
+                                                         1, self.levels_num - 1] * F.max_pool2d(
+            intermediate_features[self.levels_num - 2], kernel_size=2)
+        intermediate_features[self.levels_num - 1] = self.bifpn_convs[index_bifpn_convs](
+            intermediate_features[self.levels_num - 1])
 
-        return path_feats
+        # add top-block results
+        if self.top_block is not None:
+            top_block_in_feature = bottom_up_features.get(self.top_block.in_feature, None)
+            if top_block_in_feature is None:
+                top_block_in_feature = intermediate_features[self._out_features.index(self.top_block.in_feature)]
+            intermediate_features.extend(self.top_block(top_block_in_feature))
+
+        assert len(self._out_features) == len(intermediate_features)
+        return dict(zip(self._out_features, intermediate_features))
 
     def forward(self, x):
         """
@@ -301,7 +288,7 @@ class BiFPN(Backbone):  # todo: make bifpn implementation compliant to FPN imple
 
         # Reverse feature maps into top-down order (from low to high resolution)
         bottom_up_features = self.bottom_up(x)
-        x = [bottom_up_features[f] for f in self.in_features[::-1]]
+        x = [bottom_up_features[f] for f in self.in_features[::-1]]  # get the inputs data from bottom_up
         results = []
         prev_features = self.lateral_convs[0](x[0])
         results.append(self.output_convs[0](prev_features))
