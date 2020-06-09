@@ -240,8 +240,7 @@ class BiFPN(Backbone):  # todo: implement a version that works
         # bifpn blocks
         self.bifpn_convs = []
         for i in range(2 * self.levels_num - 1):
-            in_channels =  #
-            self.bifpn_convs.append(SeparableConvBlock(in_channels, out_channels))
+            self.bifpn_convs.append(SeparableConvBlock(in_channels=out_channels))
 
     @property
     def size_divisibility(self):
@@ -266,11 +265,12 @@ class BiFPN(Backbone):  # todo: implement a version that works
 
         # build top-down structure
         for i in range(self.levels_num - 1, 0, -1):
-            # todo: build top-down
             path_feats[i - 1] = (weights_for_2_fusion[0, i - 1] * input_clone[i - 1] + weights_for_2_fusion[
                 1, i - 1] * F.interpolate(path_feats[i], scale_factor=2, mode='nearest'))
 
-            path_feats[i - 1] = self.
+            path_feats[i - 1] = self.bifpn_convs[index_bifpn_convs](path_feats[i - 1])
+
+        # todo build down-up
 
     def forward(self, x):
         """
