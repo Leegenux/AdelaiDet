@@ -127,7 +127,7 @@ class SeparableConvBlock(nn.Module):  # batch normalization enabled by default
         return x
 
 
-class BiFPN(Backbone):  # todo: check compliance to FPN
+class BiFPN(Backbone):  # todo check initialization
     """
     This module implements :paper:`BiFPN`.
     It creates pyramid features built on top of some input feature maps.
@@ -204,11 +204,13 @@ class BiFPN(Backbone):  # todo: check compliance to FPN
                 self.resize_convs.append(Conv2d(
                     num_in_channel, out_channels, kernel_size=1, bias=use_bias, norm=get_norm(norm, out_channels)
                 ))
+            weight_init.c2_xavier_fill(self.resize_convs[-1])
 
-        # bifpn blocks todo figure out usage of self.add_module
+        # bifpn blocks todo use add_module to add conv layers
         self.bifpn_convs = []
         for i in range(2 * self.levels_num - 1):
             self.bifpn_convs.append(SeparableConvBlock(in_channels=out_channels, activation=True))
+            # todo find a proper way to initialize the SeparableConvBlock's weights
 
     @property
     def size_divisibility(self):
@@ -270,7 +272,7 @@ class BiFPN(Backbone):  # todo: check compliance to FPN
                                                                         kernel_size=2)
         )
 
-        # add top-block results todo check correctness from here
+        # add top-block results
         if self.top_block is not None:
             top_block_in_feature = bottom_up_features.get(self.top_block.in_feature, None)  # in feature is a
             if top_block_in_feature is None:
