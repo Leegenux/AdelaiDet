@@ -124,7 +124,8 @@ class BiFPN(Backbone):  # todo check initialization
         for i in range(2 * self.levels_num - 1):
             self.bifpn_convs.append(
                 Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=use_bias,
-                       norm=get_norm(norm, out_channels)))
+                       norm=get_norm(norm, out_channels))
+            )
             weight_init.c2_xavier_fill(self.bifpn_convs[-1])
 
     @property
