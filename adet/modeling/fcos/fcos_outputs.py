@@ -103,29 +103,29 @@ class FCOSOutputs(nn.Module):
         # compute locations to size ranges
         loc_to_size_range = []
         for l, loc_per_level in enumerate(locations):
-            loc_to_size_range_per_level = loc_per_level.new_tensor(self.sizes_of_interest[l])
+            loc_to_size_range_per_level = loc_per_level.new_tensor(self.sizes_of_interest[l])  # 用size of interest
             loc_to_size_range.append(
-                loc_to_size_range_per_level[None].expand(num_loc_list[l], -1)
+                loc_to_size_range_per_level[None].expand(num_loc_list[l], -1)                  # expand 表示用已有元素扩充，以满足维度
             )
 
         loc_to_size_range = torch.cat(loc_to_size_range, dim=0)
         locations = torch.cat(locations, dim=0)
 
-        training_targets = self.compute_targets_for_locations(
+        training_targets = self.compute_targets_for_locations(  # 返回值包含每个像素点对应位置的label，reg_targets, target_inds.
             locations, gt_instances, loc_to_size_range, num_loc_list
         )
 
-        training_targets["locations"] = [locations.clone() for _ in range(len(gt_instances))]
-        training_targets["im_inds"] = [
+        training_targets["locations"] = [locations.clone() for _ in range(len(gt_instances))]  # add "locations" to training_targets
+        training_targets["im_inds"] = [  # 每个像素位置对应的im的索引
             locations.new_ones(locations.size(0), dtype=torch.long) * i for i in range(len(gt_instances))
         ]
 
-        # transpose im first training_targets to level first ones
+        # transpose im-first training_targets to level-first ones
         training_targets = {
-            k: self._transpose(v, num_loc_list) for k, v in training_targets.items()
+            k: self._transpose(v, num_loc_list) for k, v in training_targets.items()  # 进行索引的调整, 结果就是按照level分片，而image层面则被堆叠起来了
         }
 
-        training_targets["fpn_levels"] = [
+        training_targets["fpn_levels"] = [  # 每个像素位置对应的level的索引
             loc.new_ones(len(loc), dtype=torch.long) * level
             for level, loc in enumerate(training_targets["locations"])
         ]
@@ -137,7 +137,7 @@ class FCOSOutputs(nn.Module):
 
         return training_targets
 
-    def get_sample_region(self, boxes, strides, num_loc_list, loc_xs, loc_ys, bitmasks=None, radius=1):
+    def get_sample_region(self, boxes, strides, num_loc_list, loc_xs, loc_ys, bitmasks=None, radius=1):  # called against one image in batch
         if bitmasks is not None:
             _, h, w = bitmasks.size()
 
@@ -155,18 +155,18 @@ class FCOSOutputs(nn.Module):
 
         num_gts = boxes.shape[0]
         K = len(loc_xs)
-        boxes = boxes[None].expand(K, num_gts, 4)
-        center_x = center_x[None].expand(K, num_gts)
+        boxes = boxes[None].expand(K, num_gts, 4)      # expand to fit each location 
+        center_x = center_x[None].expand(K, num_gts)    # 针对每个box 获取中心的坐标
         center_y = center_y[None].expand(K, num_gts)
-        center_gt = boxes.new_zeros(boxes.shape)
+        center_gt = boxes.new_zeros(boxes.shape)       # b
         # no gt
         if center_x.numel() == 0 or center_x[..., 0].sum() == 0:
             return loc_xs.new_zeros(loc_xs.shape, dtype=torch.uint8)
         beg = 0
-        for level, num_loc in enumerate(num_loc_list):
+        for level, num_loc in enumerate(num_loc_list):  # 根据radius，限制每个box的大小
             end = beg + num_loc
             stride = strides[level] * radius
-            xmin = center_x[beg:end] - stride
+            xmin = center_x[beg:end] - stride  # 针对每个像素，x的范围（此为最小值）
             ymin = center_y[beg:end] - stride
             xmax = center_x[beg:end] + stride
             ymax = center_y[beg:end] + stride
@@ -176,7 +176,7 @@ class FCOSOutputs(nn.Module):
             center_gt[beg:end, :, 2] = torch.where(xmax > boxes[beg:end, :, 2], boxes[beg:end, :, 2], xmax)
             center_gt[beg:end, :, 3] = torch.where(ymax > boxes[beg:end, :, 3], boxes[beg:end, :, 3], ymax)
             beg = end
-        left = loc_xs[:, None] - center_gt[..., 0]
+        left = loc_xs[:, None] - center_gt[..., 0]  # 作比较，其中较大的在bbox里面
         right = center_gt[..., 2] - loc_xs[:, None]
         top = loc_ys[:, None] - center_gt[..., 1]
         bottom = center_gt[..., 3] - loc_ys[:, None]
@@ -197,7 +197,7 @@ class FCOSOutputs(nn.Module):
             labels_per_im = targets_per_im.gt_classes
 
             # no gt
-            if bboxes.numel() == 0:
+            if bboxes.numel() == 0:         # numel 也就是元素个数(number of elements)
                 labels.append(labels_per_im.new_zeros(locations.size(0)) + self.num_classes)
                 reg_targets.append(locations.new_zeros((locations.size(0), 4)))
                 target_inds.append(labels_per_im.new_zeros(locations.size(0)) - 1)
@@ -209,14 +209,14 @@ class FCOSOutputs(nn.Module):
             t = ys[:, None] - bboxes[:, 1][None]
             r = bboxes[:, 2][None] - xs[:, None]
             b = bboxes[:, 3][None] - ys[:, None]
-            reg_targets_per_im = torch.stack([l, t, r, b], dim=2)
+            reg_targets_per_im = torch.stack([l, t, r, b], dim=2)   # 每个像素点原始的回归目标
 
             if self.center_sample:
                 if targets_per_im.has("gt_bitmasks_full"):
                     bitmasks = targets_per_im.gt_bitmasks_full
                 else:
                     bitmasks = None
-                is_in_boxes = self.get_sample_region(
+                is_in_boxes = self.get_sample_region(       # 一个用于将bboxes映射到各个层次，并且获取一个mask的函数
                     bboxes, self.strides, num_loc_list, xs, ys,
                     bitmasks=bitmasks, radius=self.radius
                 )
@@ -237,7 +237,7 @@ class FCOSOutputs(nn.Module):
             # we choose the one with minimal area
             locations_to_min_area, locations_to_gt_inds = locations_to_gt_area.min(dim=1)
 
-            reg_targets_per_im = reg_targets_per_im[range(len(locations)), locations_to_gt_inds]
+            reg_targets_per_im = reg_targets_per_im[range(len(locations)), locations_to_gt_inds]  # 挑选过后的reg_targets BUG: 默认为0
             target_inds_per_im = locations_to_gt_inds + num_targets
             num_targets += len(targets_per_im)
 
@@ -318,8 +318,8 @@ class FCOSOutputs(nn.Module):
 
         labels = instances.labels.flatten()
 
-        pos_inds = torch.nonzero(labels != num_classes).squeeze(1)
-        num_pos_local = pos_inds.numel()
+        pos_inds = torch.nonzero(labels != num_classes).squeeze(1)   # `squeeze` removes dimensions of size 1
+        num_pos_local = pos_inds.numel()                             # 前景点数目, 如果是多卡的话，返回多个值
         num_gpus = get_world_size()
         total_num_pos = reduce_sum(pos_inds.new_tensor([num_pos_local])).item()
         num_pos_avg = max(total_num_pos / num_gpus, 1.0)
@@ -336,11 +336,11 @@ class FCOSOutputs(nn.Module):
             reduction="sum",
         ) / num_pos_avg
 
-        instances = instances[pos_inds]
+        instances = instances[pos_inds]                                 # 仅关注前景部分
         instances.pos_inds = pos_inds
 
-        ctrness_targets = compute_ctrness_targets(instances.reg_targets)
-        ctrness_targets_sum = ctrness_targets.sum()
+        ctrness_targets = compute_ctrness_targets(instances.reg_targets)   # 计算中心度
+        ctrness_targets_sum = ctrness_targets.sum()                        # 多卡情况下，sum函数返回多个元素
         loss_denorm = max(reduce_sum(ctrness_targets_sum).item() / num_gpus, 1e-6)
         instances.gt_ctrs = ctrness_targets
 
