@@ -97,7 +97,8 @@ class FCOSOutputs(nn.Module):
             )
         return targets_level_first
 
-    def _get_ground_truth(self, locations, gt_instances):
+    def _get_ground_truth(self, locations, gt_instances):  
+        # `locations`为像素点的位置; `gt_instance`为一个list, 每个element包含一个图片的信息
         num_loc_list = [len(loc) for loc in locations]
 
         # compute locations to size ranges
@@ -155,7 +156,7 @@ class FCOSOutputs(nn.Module):
 
         num_gts = boxes.shape[0]
         K = len(loc_xs)
-        boxes = boxes[None].expand(K, num_gts, 4)      # expand to fit each location 
+        boxes = boxes[None].expand(K, num_gts, 4)      # expand to fit each location
         center_x = center_x[None].expand(K, num_gts)    # 针对每个box 获取中心的坐标
         center_y = center_y[None].expand(K, num_gts)
         center_gt = boxes.new_zeros(boxes.shape)       # b

@@ -40,6 +40,7 @@ def aligned_bilinear(tensor, factor):
 
 
 def compute_locations(h, w, stride, device):
+    # 生成一个x, y的偏移向量
     shifts_x = torch.arange(
         0, w * stride, step=stride,
         dtype=torch.float32, device=device
@@ -48,6 +49,7 @@ def compute_locations(h, w, stride, device):
         0, h * stride, step=stride,
         dtype=torch.float32, device=device
     )
+    # 利用meshgrid函数, 将两个偏移向量构建成矩阵的下标系统
     shift_y, shift_x = torch.meshgrid(shifts_y, shifts_x)
     shift_x = shift_x.reshape(-1)
     shift_y = shift_y.reshape(-1)
